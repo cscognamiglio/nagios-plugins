@@ -21,8 +21,8 @@ MIB_LOCATION="PowerNet-MIB::rPDU2IdentLocation"
 MIB_MODEL="PowerNet-MIB::rPDU2IdentModelNumber"
 
 MIB_LOAD="PowerNet-MIB::rPDULoadStatusLoad"
-MIB_LOAD_HIGH="rPDULoadPhaseConfigNearOverloadThreshold.phase1"
-MIB_LOAD_MAX="rPDULoadPhaseConfigOverloadThreshold.phase1"
+MIB_LOAD_HIGH="PowerNet-MIB::rPDULoadPhaseConfigNearOverloadThreshold.phase1"
+MIB_LOAD_MAX="PowerNet-MIB::rPDULoadPhaseConfigOverloadThreshold.phase1"
 MIB_WATTS="PowerNet-MIB::rPDUIdentDevicePowerWatts"
 MIB_VA="PowerNet-MIB::rPDUIdentDevicePowerVA"
 MIB_VOLTAGE="PowerNet-MIB::rPDU2PhaseStatusVoltage"
@@ -42,16 +42,15 @@ version() {
 
 
 help() {
-        print_revision $PROGNAME $REVISION
         echo ""
         echo "Nagios Plugin to check APC PDU load, humidity and temperature status"
         echo ""
-        echo "Usage: $PROGNAME [-h] [-V] -H hostname [-c community] [-l | -h | -t] [-w warning] [-c critical]"
+        echo "Usage: $PROGNAME [-h] [-V] -H hostname [-c community] [-l | -h | -t]"
 		echo "	-h	Help"
 		echo "	-V	Version"
 		echo "	-H	Remote host"
         echo "	-C	Community"
-        echo "	-l	Load"
+        echo "	-l	Load (default)"
     	echo "	-h	Humidity"
     	echo "	-t	Temperature"
 		echo ""
@@ -62,10 +61,16 @@ help() {
 }
 
 snmp() {
-	echo `snmpwalk -v2c -c ${COMMUNITY} ${REMOTEHOST} ${1} | awk '{print $4}'`
+	echo `${SNMPWALK} -c ${COMMUNITY} ${REMOTEHOST} ${1} | awk '{print $4}'`
+}
+
+snmp_text() {
+	echo `${SNMPWALK} -c ${COMMUNITY} ${REMOTEHOST} ${1} | cut -d '"' -f2`
 }
 
 exitstatus=$STATUS_WARNING
+
+bc -v >/dev/null 2>&1 || { echo >&2 "bc is required"; exit $exitstatus; }
 
 options=':hVltuH:c:'
 while getopts $options option; do
@@ -104,6 +109,11 @@ fi
 if [ -z $COMMUNITY ]; then
 	COMMUNITY=public
 fi
+if [ -z $STATUS ]; then
+	STATUS="load"
+fi
+
+LOCATION="$(snmp_text $MIB_LOCATION)"
 
 case $STATUS in
 	load)
@@ -111,7 +121,7 @@ case $STATUS in
 		LOAD=`echo "scale=0; ${NOMINAL}/10" | bc`
 		WARNING=$(snmp $MIB_LOAD_HIGH)
 		CRITICAL=$(snmp $MIB_LOAD_MAX)
-		TXT="Load is `echo "scale=1; ${NOMINAL}/10" | bc` Amperes"
+		TXT="Load is `echo "scale=1; ${NOMINAL}/10" | bc`A"
 		CHECK="higher"
 		;;
 	temperature)
@@ -135,30 +145,30 @@ case $CHECK in
 	lower)
 		if [ $LOAD -gt $WARNING ]; then
 			exitstatus=$STATUS_OK
-			MSG="OK: "
+			MSG="OK:"
 		elif [ $LOAD -gt $CRITICAL ]; then
 			exitstatus=$STATUS_WARNING
-			MSG="WARNING: "
+			MSG="WARNING:"
 		elif [ $LOAD -lt $CRITICAL ]; then
 			exitstatus=$STATUS_CRITICAL
-			MSG="CRITICAL: "
+			MSG="CRITICAL:"
 		fi
 		;;
 	higher)
 		if [ $LOAD -lt $WARNING ]; then
 			exitstatus=$STATUS_OK
-			MSG="OK: "
+			MSG="OK:"
 		elif [ $LOAD -lt $CRITICAL ]; then
 			exitstatus=$STATUS_WARNING
-			MSG="WARNING: "
+			MSG="WARNING:"
 		elif [ $LOAD -ge $CRITICAL ]; then
 			exitstatus=$STATUS_CRITICAL
-			MSG="CRITICAL: "
+			MSG="CRITICAL:"
 		fi
 		;;
 esac
 
 
-echo $MSG $TXT
+echo "$MSG $TXT in $LOCATION"
 exit $exitstatus
 
