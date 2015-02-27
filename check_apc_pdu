@@ -2,11 +2,11 @@
 #
 #	check_apc_pdu: APC PDU load, humidity and temperature status
 #   
-#   Supports APC rack PDU 2G model AP8858EU3 and temperature/humidity sensor
+#	Supports APC rack PDU 2G model AP8858EU3 and temperature/humidity sensor
 #
 #	Copyright 2015 Ciro Scognamiglio <c.scognamiglio@cslash.net>
-#   
 #	Distributed under the GPLv2 License
+#
 
 PROGNAME=${0##*/}
 VERSION="1.0.0"
@@ -40,24 +40,23 @@ version() {
 	exit 0
 }
 
-
 help() {
-        echo ""
-        echo "Nagios Plugin to check APC PDU load, humidity and temperature status"
-        echo ""
-        echo "Usage: $PROGNAME [-h] [-V] -H hostname [-c community] [-l | -h | -t]"
-		echo "	-h	Help"
-		echo "	-V	Version"
-		echo "	-H	Remote host"
-        echo "	-C	Community"
-        echo "	-l	Load (default)"
-    	echo "	-h	Humidity"
-    	echo "	-t	Temperature"
-		echo ""
-		echo ""
-        echo "Copyright 2015 Ciro Scognamiglio <c.scognamiglio@cslash.net>"
-        echo ""
-        exit 0
+	echo ""
+	echo "Nagios Plugin to check APC PDU load, humidity and temperature status"
+	echo ""
+	echo "Usage: $PROGNAME [-h] [-V] -H hostname [-c community] [-l | -h | -t]"
+	echo "	-h	Help"
+	echo "	-V	Version"
+	echo "	-H	Remote host"
+	echo "	-C	SNMP Community"
+	echo "	-l	Power load (default)"
+	echo "	-h	Humidity"
+	echo "	-t	Temperature"
+	echo ""
+	echo ""
+	echo "Copyright 2015 Ciro Scognamiglio <c.scognamiglio@cslash.net>"
+	echo ""
+	exit 0
 }
 
 snmp() {
@@ -74,32 +73,32 @@ bc -v >/dev/null 2>&1 || { echo >&2 "bc is required"; exit $exitstatus; }
 
 options=':hVltuH:c:'
 while getopts $options option; do
-        case $option in
-                h) 
-                	help 
-                	;;
-                V)
-                    version
-    				;;
-                H)
-                    REMOTEHOST=${OPTARG}
-                    ;;
-                c) 
-                	COMMUNITY=${OPTARG}
-                    ;;
-                l)
-                	STATUS="load"
-                	;;
-                t)
-                	STATUS="temperature"
-                	;;
-                u)
-                	STATUS="humidity"
-                	;;
-                *)
-                    usage
-                    ;;
-        esac
+	case $option in
+		h) 
+			help 
+			;;
+		V)
+			version
+    		;;
+		H)
+			REMOTEHOST=${OPTARG}
+			;;
+		c) 
+			COMMUNITY=${OPTARG}
+			;;
+		l)
+			STATUS="load"
+			;;
+		t)
+			STATUS="temperature"
+			;;
+		u)
+			STATUS="humidity"
+			;;
+		*)
+			usage
+			;;
+	esac
 done
 
 if [ -z $REMOTEHOST ]; then
