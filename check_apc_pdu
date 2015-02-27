@@ -1,0 +1,164 @@
+#!/bin/bash
+#
+#	check_apc_pdu: APC PDU load, humidity and temperature status
+#   
+#   Supports APC rack PDU 2G model AP8858EU3 and temperature/humidity sensor
+#
+#	Copyright 2015 Ciro Scognamiglio <c.scognamiglio@cslash.net>
+#   
+#	Distributed under the GPLv2 License
+
+PROGNAME=${0##*/}
+VERSION="1.0.0"
+
+STATUS_OK=0
+STATUS_WARNING=1
+STATUS_CRITICAL=2
+STATUS_UNKNOWN=3
+
+MIB_NAME="PowerNet-MIB::rPDU2DeviceStatusName"
+MIB_LOCATION="PowerNet-MIB::rPDU2IdentLocation"
+MIB_MODEL="PowerNet-MIB::rPDU2IdentModelNumber"
+
+MIB_LOAD="PowerNet-MIB::rPDULoadStatusLoad"
+MIB_LOAD_HIGH="rPDULoadPhaseConfigNearOverloadThreshold.phase1"
+MIB_LOAD_MAX="rPDULoadPhaseConfigOverloadThreshold.phase1"
+MIB_WATTS="PowerNet-MIB::rPDUIdentDevicePowerWatts"
+MIB_VA="PowerNet-MIB::rPDUIdentDevicePowerVA"
+MIB_VOLTAGE="PowerNet-MIB::rPDU2PhaseStatusVoltage"
+MIB_TEMP="PowerNet-MIB::rPDU2SensorTempHumidityStatusTempC"
+MIB_TEMP_HIGH="PowerNet-MIB::rPDU2SensorTempHumidityConfigTempHighThreshC"
+MIB_TEMP_MAX="PowerNet-MIB::rPDU2SensorTempHumidityConfigTempMaxThreshC"
+MIB_HUM="PowerNet-MIB::rPDU2SensorTempHumidityStatusRelativeHumidity"
+MIB_HUM_LOW="PowerNet-MIB::rPDU2SensorTempHumidityConfigHumidityLowThresh"
+MIB_HUM_MIN="PowerNet-MIB::rPDU2SensorTempHumidityConfigHumidityMinThresh"
+
+SNMPWALK="snmpwalk -v2c"
+
+version() {
+	echo $VERSION
+	exit 0
+}
+
+
+help() {
+        print_revision $PROGNAME $REVISION
+        echo ""
+        echo "Nagios Plugin to check APC PDU load, humidity and temperature status"
+        echo ""
+        echo "Usage: $PROGNAME [-h] [-V] -H hostname [-c community] [-l | -h | -t] [-w warning] [-c critical]"
+		echo "	-h	Help"
+		echo "	-V	Version"
+		echo "	-H	Remote host"
+        echo "	-C	Community"
+        echo "	-l	Load"
+    	echo "	-h	Humidity"
+    	echo "	-t	Temperature"
+		echo ""
+		echo ""
+        echo "Copyright 2015 Ciro Scognamiglio <c.scognamiglio@cslash.net>"
+        echo ""
+        exit 0
+}
+
+snmp() {
+	echo `snmpwalk -v2c -c ${COMMUNITY} ${REMOTEHOST} ${1} | awk '{print $4}'`
+}
+
+exitstatus=$STATUS_WARNING
+
+options=':hVltuH:c:'
+while getopts $options option; do
+        case $option in
+                h) 
+                	help 
+                	;;
+                V)
+                    version
+    				;;
+                H)
+                    REMOTEHOST=${OPTARG}
+                    ;;
+                c) 
+                	COMMUNITY=${OPTARG}
+                    ;;
+                l)
+                	STATUS="load"
+                	;;
+                t)
+                	STATUS="temperature"
+                	;;
+                u)
+                	STATUS="humidity"
+                	;;
+                *)
+                    usage
+                    ;;
+        esac
+done
+
+if [ -z $REMOTEHOST ]; then
+	echo "no remote host specified"
+	exit $STATUS_UNKNOWN
+fi
+if [ -z $COMMUNITY ]; then
+	COMMUNITY=public
+fi
+
+case $STATUS in
+	load)
+		NOMINAL=$(snmp $MIB_LOAD)
+		LOAD=`echo "scale=0; ${NOMINAL}/10" | bc`
+		WARNING=$(snmp $MIB_LOAD_HIGH)
+		CRITICAL=$(snmp $MIB_LOAD_MAX)
+		TXT="Load is `echo "scale=1; ${NOMINAL}/10" | bc` Amperes"
+		CHECK="higher"
+		;;
+	temperature)
+		NOMINAL=$(snmp $MIB_TEMP)
+		LOAD=`echo "scale=0; ${NOMINAL}/10" | bc`
+		WARNING=$(snmp $MIB_TEMP_HIGH)
+		CRITICAL=$(snmp $MIB_TEMP_MAX)
+		TXT="Temperature is `echo "scale=1; ${NOMINAL}/10" | bc`C"
+		CHECK="higher"
+		;;
+	humidity)
+		LOAD=$(snmp $MIB_HUM)
+		WARNING=$(snmp $MIB_HUM_LOW)
+		CRITICAL=$(snmp $MIB_HUM_MIN)
+		TXT="Humidity is ${LOAD}%"
+		CHECK="lower"
+		;;
+esac
+
+case $CHECK in
+	lower)
+		if [ $LOAD -gt $WARNING ]; then
+			exitstatus=$STATUS_OK
+			MSG="OK: "
+		elif [ $LOAD -gt $CRITICAL ]; then
+			exitstatus=$STATUS_WARNING
+			MSG="WARNING: "
+		elif [ $LOAD -lt $CRITICAL ]; then
+			exitstatus=$STATUS_CRITICAL
+			MSG="CRITICAL: "
+		fi
+		;;
+	higher)
+		if [ $LOAD -lt $WARNING ]; then
+			exitstatus=$STATUS_OK
+			MSG="OK: "
+		elif [ $LOAD -lt $CRITICAL ]; then
+			exitstatus=$STATUS_WARNING
+			MSG="WARNING: "
+		elif [ $LOAD -ge $CRITICAL ]; then
+			exitstatus=$STATUS_CRITICAL
+			MSG="CRITICAL: "
+		fi
+		;;
+esac
+
+
+echo $MSG $TXT
+exit $exitstatus
+
